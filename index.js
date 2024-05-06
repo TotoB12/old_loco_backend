@@ -1,44 +1,61 @@
 const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const escapeHTML = require('escape-html');
+
 const app = express();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server);
+const server = http.createServer(app);
+const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
-
-const users = [];
+const users = {
+  "102401e3-e8ef-4ff4-8477-41bd992a1edc": {
+    id: "102401e3-e8ef-4ff4-8477-41bd992a1edc",
+    name: "",
+    location: {
+      speed: 0,
+      altitudeAccuracy: 0.5,
+      latitude: 37.2964517,
+      heading: 90,
+      altitude: 0,
+      longitude: -122.0306383,
+      accuracy: 5,
+    },
+  },
+};
 
 io.on('connection', (socket) => {
-  console.log('New client connected');
+  console.log('New client connected', socket.id);
 
   socket.on('join', ({ id, location }) => {
-    const user = { id, name: '', location };
-    users.push(user);
+    users[id] = { id: socket.id, name: '', location };
     io.emit('users', users);
   });
 
   socket.on('location', ({ id, location }) => {
-    const user = users.find((user) => user.id === id);
-    if (user) {
-      user.location = location;
+    console.log("User joined");
+    if (users[id]) {
+      users[id].location = location;
+      console.log(users);
       io.emit('users', users);
     }
   });
 
   socket.on('updateName', ({ id, name }) => {
-    const user = users.find((user) => user.id === id);
-    if (user) {
-      user.name = name;
+    if (users[id]) {
+      users[id].name = escapeHTML(name);
       io.emit('users', users);
     }
   });
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected');
-    const user = users.find((user) => user.id === socket.id);
-    if (user) {
-      users.splice(users.indexOf(user), 1);
-      io.emit('users', users);
-    }
+    console.log('Client disconnected', socket.id);
+    Object.keys(users).forEach((userId) => {
+      if (users[userId].socketId === socket.id) {
+        delete users[userId];
+        io.emit('users', users);
+      }
+    });
   });
 });
 
